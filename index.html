@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>♥ Nora ♥</title>
+  <title>Heart Shape Animation</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{background:#080810;width:100vw;height:100vh;overflow:hidden;cursor:none}
@@ -15,6 +15,7 @@
 <body>
 <div id="cursor"></div>
 <canvas id="c"></canvas>
+<audio id="bgm" src="olympus-blondshell.mp3" autoplay loop></audio>
 <script>
 // ══ AYARLAR ════════════════════════════════════════════════════
 const SPEED = {
@@ -34,6 +35,12 @@ const cur = document.getElementById('cursor');
 document.addEventListener('mousemove', e => {
   cur.style.left = e.clientX+'px'; cur.style.top = e.clientY+'px';
 });
+
+// Ses %10
+const bgm = document.getElementById('bgm');
+bgm.volume = 0.1;
+// Tarayıcı autoplay engelini aşmak için ilk tıklamada başlat
+document.addEventListener('click', () => bgm.play(), { once: true });
 
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
