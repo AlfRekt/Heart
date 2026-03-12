@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>♥ Nora ♥</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#080810;width:100vw;height:100vh;overflow:hidden;cursor:none}
+    canvas{display:block}
+    #cursor{position:fixed;width:7px;height:7px;background:#fff;border-radius:50%;
+      pointer-events:none;z-index:9999;transform:translate(-50%,-50%);opacity:.7}
+  </style>
+</head>
+<body>
+<div id="cursor"></div>
+<canvas id="c"></canvas>
+<script>
+// ══ AYARLAR ════════════════════════════════════════════════════
+const SPEED = {
+  particles : 1.5,  // kalp partikülleri  (0.3 yavaş → 3.0 hızlı)
+  pulse     : 1.5,  // nabız hızı         (0.3 yavaş → 3.0 hızlı)
+  colorCycle: 1.0,  // renk geçiş hızı    (0.2 yavaş → 3.0 hızlı)
+  textRepeat: 0.5,  // harf çizgi hızı    (0.3 yavaş → 3.0 hızlı)
+};
+
+const TEXT = {
+  trailCount: 4,    // her harfte kaç çizgi koşsun (1 → 10)
+  trailSpeed: 0.5,  // çizgi hızı (0.3 yavaş → 3.0 hızlı)
+};
+// ═══════════════════════════════════════════════════════════════
+
+const cur = document.getElementById('cursor');
+document.addEventListener('mousemove', e => {
+  cur.style.left = e.clientX+'px'; cur.style.top = e.clientY+'px';
+});
+
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+let W, H, CX, CY, SC;
+
+function setSize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  CX = W/2; CY = H/2;
+  SC = Math.min(W,H) * 0.022;
+}
+
+// ── Heart math ──────────────────────────────────────────────────
+function heartPt(t, cx, cy, sc) {
+  const s = Math.sin(t);
+  return {
+    x: cx + sc*16*s*s*s,
+    y: cy - sc*(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t))
+  };
+}
+
+// ── Color: white ↔ blue cycle ───────────────────────────────────
+function cycleColor(t, phase) {
+  const c = ((t * SPEED.colorCycle * 0.3 + phase) % (Math.PI*2)) / (Math.PI*2);
+  const f = Math.sin(c * Math.PI);
+  return [Math.round(255-f*155), Math.round(255-f*95), 255];
+}
+
+// ── Path builders ────────────────────────────────────────────────
+function linePts(x0,y0,x1,y1,n=70) {
+  const pts=[];
+  for(let i=0;i<=n;i++){const t=i/n; pts.push({x:x0+(x1-x0)*t,y:y0+(y1-y0)*t});}
+  return pts;
+}
+function arcPts(cx,cy,rx,ry,a0,a1,n=100) {
+  const pts=[];
+  for(let i=0;i<=n;i++){
+    const a=a0+(a1-a0)*i/n;
+    pts.push({x:cx+rx*Math.cos(a),y:cy+ry*Math.sin(a)});
+  }
+  return pts;
+}
+function cubicPts(x0,y0,cx1,cy1,cx2,cy2,x1,y1,n=80) {
+  const pts=[];
+  for(let i=0;i<=n;i++){
+    const t=i/n,m=1-t;
+    pts.push({
+      x:m*m*m*x0+3*m*m*t*cx1+3*m*t*t*cx2+t*t*t*x1,
+      y:m*m*m*y0+3*m*m*t*cy1+3*m*t*t*cy2+t*t*t*y1,
+    });
+  }
+  return pts;
+}
+
+// ── Letter paths ─────────────────────────────────────────────────
+let letters = [];
+
+function buildLetterPaths() {
+  const LW = SC*2.4, LH = SC*3.8, LG = SC*1.1;
+  const totalW = 4*LW + 3*LG;
+  const lx = CX - totalW/2;
+  const ly = CY - SC*0.5;
+
+  function box(i) {
+    const cx = lx + (i*(LW+LG)) + LW/2;
+    return {
+      cx, cy:ly,
+      x0:cx-LW/2, x1:cx+LW/2,
+      y0:ly-LH/2, y1:ly+LH/2,
+      xm:cx, ym:ly,
+    };
+  }
+
+  letters = [];
+
+  // N
+  {
+    const {x0,x1,y0,y1} = box(0);
+    letters.push({ strokes: [[
+      ...linePts(x0,y1,x0,y0,70),
+      ...linePts(x0,y0,x1,y1,80),
+      ...linePts(x1,y1,x1,y0,70),
+    ]]});
+  }
+
+  // O — oval, starts from left (9 o'clock), two arcs simultaneously
+  {
+    const {cx,cy} = box(1);
+    const rx = LW*0.46, ry = LH*0.52;
+    const PI = Math.PI;
+    letters.push({ strokes: [
+      arcPts(cx,cy,rx,ry, PI,   0,    130),  // top arc: left→top→right
+      arcPts(cx,cy,rx,ry, PI,   PI*2, 130),  // bottom arc: left→bottom→right
+    ]});
+  }
+
+  // R
+  {
+    const {x0,x1,y0,y1,ym} = box(2);
+    letters.push({ strokes: [[
+      ...linePts(x0,y1,x0,y0,68),
+      ...cubicPts(x0,y0,x1,y0,x1,ym,x0,ym,85),
+      ...linePts(x0,ym,x1,y1,68),
+    ]]});
+  }
+
+  // A
+  {
+    const {x0,x1,xm,y0,y1} = box(3);
+    const barY = ly + LH*0.13;
+    const barL = x0 + LW*0.18;
+    const barR = x0 + LW*0.82;
+    letters.push({ strokes: [[
+      ...linePts(x0,y1,xm,y0,75),
+      ...linePts(xm,y0,x1,y1,75),
+      ...linePts(x1,y1,barR,barY,22),
+      ...linePts(barR,barY,barL,barY,45),
+    ]]});
+  }
+}
+
+// ── Trail drawing ────────────────────────────────────────────────
+// progress: 0→1, single trail head sweeps stroke start→end then resets
+// trailCount: multiple heads spaced evenly, each independent
+const TRAIL_LEN = 55;
+
+function drawTrail(stroke, progress, colorPhase) {
+  if (!stroke || stroke.length < 2) return;
+  const len = stroke.length;
+  const [r,g,b] = cycleColor(T, colorPhase);
+  ctx.lineCap = 'round';
+
+  for (let ti = 0; ti < TEXT.trailCount; ti++) {
+    // Offset each trail evenly: 0, 1/n, 2/n of the stroke
+    const offset  = ti / TEXT.trailCount;
+    const headRaw = (progress + offset) % 1;
+    const hi      = Math.floor(headRaw * len);
+
+    // Fade out multiplier: 1.0 until 75% of stroke, then fades to 0 at 100%
+    const fadeStart = 0.75;
+    const endFade   = headRaw < fadeStart ? 1.0 : 1.0 - (headRaw - fadeStart) / (1.0 - fadeStart);
+
+    // Draw fading trail segments behind head
+    for (let i = TRAIL_LEN; i >= 1; i--) {
+      const a  = hi - i;
+      const b2 = hi - i + 1;
+      if (a < 0 || b2 < 0 || b2 >= len) continue;
+      const frac = 1 - i / TRAIL_LEN;
+      ctx.globalAlpha = Math.pow(frac, 1.5) * 0.90 * endFade;
+      ctx.lineWidth   = frac * 4.0 + 0.5;
+      ctx.strokeStyle = `rgb(${r},${g},${b})`;
+      ctx.beginPath();
+      ctx.moveTo(stroke[a].x,  stroke[a].y);
+      ctx.lineTo(stroke[b2].x, stroke[b2].y);
+      ctx.stroke();
+    }
+
+    // Glowing head dot
+    if (hi >= 0 && hi < len) {
+      ctx.globalAlpha = endFade;
+      ctx.shadowColor = `rgb(${r},${g},${b})`;
+      ctx.shadowBlur  = 10 * endFade;
+      ctx.fillStyle   = `rgb(${r},${g},${b})`;
+      ctx.beginPath();
+      ctx.arc(stroke[hi].x, stroke[hi].y, 2.2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+}
+
+// ── Heart particles ──────────────────────────────────────────────
+const N = 120;
+let parts = [];
+
+function initParticles() {
+  parts = [];
+  for (let i=0;i<N;i++) {
+    parts.push({
+      t  :(i/N)*Math.PI*2+(Math.random()-0.5)*0.15,
+      spd:(Math.random()*0.004+0.0005)*(Math.random()<0.5?1:-1),
+      r  :Math.random()<0.12?2.0:1.0,
+      a  :Math.random()*0.5+0.5,
+      cph:Math.random()*Math.PI*2,
+      links:[],x:0,y:0,
+    });
+  }
+  parts.forEach((p,i) => {
+    const pool=[];
+    for(let j=0;j<N;j++) if(j!==i) pool.push(j);
+    for(let k=pool.length-1;k>0;k--){
+      const r=Math.floor(Math.random()*(k+1));
+      [pool[k],pool[r]]=[pool[r],pool[k]];
+    }
+    p.links=pool.slice(0,5);
+  });
+}
+
+let edges=[];
+function buildEdges(){
+  const seen=new Uint8Array(N*N); edges=[];
+  parts.forEach((p,i)=>p.links.forEach(j=>{
+    const key=i<j?i*N+j:j*N+i;
+    if(!seen[key]){seen[key]=1;edges.push([i,j]);}
+  }));
+}
+
+const COLOR_BUCKETS=48;
+const buckets=Array.from({length:COLOR_BUCKETS},()=>[]);
+
+// ── Main loop ────────────────────────────────────────────────────
+let T=0, paused=false;
+let letterProgress=0;
+const letterCPH=[0, Math.PI*0.5, Math.PI, Math.PI*1.5];
+
+function loop(){
+  if(paused) return;
+  requestAnimationFrame(loop);
+  T+=0.008;
+  ctx.clearRect(0,0,W,H);
+
+  const pulse=1+Math.sin(T*1.3*SPEED.pulse)*0.042;
+  const sc=SC*pulse;
+  const maxLen=sc*34;
+
+  // Heart particles
+  for(let i=0;i<N;i++){
+    const p=parts[i];
+    p.t+=p.spd*SPEED.particles;
+    const pt=heartPt(p.t,CX,CY,sc);
+    p.x=pt.x; p.y=pt.y;
+  }
+
+  // Bucket sort + draw heart lines
+  for(let b=0;b<COLOR_BUCKETS;b++) buckets[b].length=0;
+  ctx.shadowBlur=0;
+  for(let e=0;e<edges.length;e++){
+    const[i,j]=edges[e];
+    const p=parts[i],q=parts[j];
+    const len=Math.hypot(q.x-p.x,q.y-p.y);
+    const alpha=p.a*q.a*(1-Math.min(len/maxLen,1)*0.5)*0.28;
+    if(alpha<0.015) continue;
+    const pos=((T*SPEED.colorCycle*0.3+p.cph)%(Math.PI*2))/(Math.PI*2);
+    buckets[Math.floor(pos*COLOR_BUCKETS)%COLOR_BUCKETS].push(i,j,alpha);
+  }
+  for(let b=0;b<COLOR_BUCKETS;b++){
+    const bkt=buckets[b]; if(!bkt.length) continue;
+    const c=b/COLOR_BUCKETS,f=Math.sin(c*Math.PI);
+    ctx.strokeStyle=`rgb(${Math.round(255-f*155)},${Math.round(255-f*95)},255)`;
+    ctx.lineWidth=0.45;
+    let lastA=-1; ctx.beginPath();
+    for(let k=0;k<bkt.length;k+=3){
+      const i=bkt[k],j=bkt[k+1],alpha=bkt[k+2];
+      if(Math.abs(alpha-lastA)>0.02){if(lastA>=0)ctx.stroke();ctx.beginPath();ctx.globalAlpha=alpha;lastA=alpha;}
+      ctx.moveTo(parts[i].x,parts[i].y);
+      ctx.lineTo(parts[j].x,parts[j].y);
+    }
+    ctx.stroke();
+  }
+
+  // Letter trails — advance progress each frame
+  letterProgress = (letterProgress + 0.005 * SPEED.textRepeat * TEXT.trailSpeed) % 1;
+  letters.forEach((letter,li)=>{
+    letter.strokes.forEach(stroke=>{
+      drawTrail(stroke, letterProgress, letterCPH[li]);
+    });
+  });
+
+  // Heart dots
+  ctx.globalAlpha=1; ctx.shadowBlur=0; ctx.lineCap='butt';
+  for(let i=0;i<N;i++){
+    const p=parts[i];
+    const tw=0.7+0.3*Math.sin(T*3+p.t*5);
+    const a=p.a*tw;
+    const[r,g,bv]=cycleColor(T,p.cph);
+    if(p.r>1.5){
+      ctx.globalAlpha=a*0.4;
+      ctx.shadowColor=`rgb(${r},${g},${bv})`; ctx.shadowBlur=8;
+      ctx.fillStyle=`rgb(${r},${g},${bv})`;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r*2.5,0,Math.PI*2); ctx.fill();
+      ctx.shadowBlur=0;
+    }
+    ctx.globalAlpha=a;
+    ctx.fillStyle=`rgb(${r},${g},${bv})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1; ctx.shadowBlur=0;
+}
+
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space'){paused=!paused; if(!paused)loop();}
+});
+window.addEventListener('resize',()=>{setSize(); buildLetterPaths();});
+
+setSize();
+initParticles();
+buildEdges();
+buildLetterPaths();
+loop();
+</script>
+</body>
+</html>
